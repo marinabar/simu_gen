@@ -121,6 +121,9 @@ export const SceneObject = forwardRef<SceneObjectHandle, Props>(function SceneOb
     colliderWireframeMaterial.needsUpdate = true
   }, [colliderWireframeMaterial])
 
+  const positionKey = position.join(',')
+  const rotationKey = rotation.join(',')
+  const scaleKey = scale.join(',')
   useEffect(() => {
     const body = rigidBodyRef.current
     if (!body) return
@@ -130,7 +133,8 @@ export const SceneObject = forwardRef<SceneObjectHandle, Props>(function SceneOb
     body.setLinvel({ x: 0, y: 0, z: 0 }, true)
     body.setAngvel({ x: 0, y: 0, z: 0 }, true)
     body.wakeUp()
-  }, [position, rotation, scale])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [positionKey, rotationKey, scaleKey])
 
   useEffect(() => () => { colliderWireframeMaterial.dispose() }, [colliderWireframeMaterial])
 
@@ -169,6 +173,8 @@ export const SceneObject = forwardRef<SceneObjectHandle, Props>(function SceneOb
           ]}
           position={[colliderCenter.x * scale[0], colliderCenter.y * scale[1], colliderCenter.z * scale[2]]}
           mass={objectMass}
+          restitution={0}
+          restitutionCombineRule="min"
         />
       )}
       <mesh

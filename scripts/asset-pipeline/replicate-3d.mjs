@@ -2,7 +2,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
-  downloadRemoteFiles,
+  downloadFile,
   ensureDir,
   loadDotEnv,
   requireEnv,
@@ -10,8 +10,8 @@ import {
 } from "./fal-queue.mjs";
 import { buildRequestSummary, requestPath } from "./request-metadata.mjs";
 
-export const REPLICATE_3D_PROVIDER = "replicate-hunyuan3d-2";
-const MODEL_VERSION = "b1b9449a1277e10402781c5d41eb30c0a0683504fb23fab591ca9dfc2aabe1cb";
+export const REPLICATE_3D_PROVIDER = "replicate-hunyuan3d-3.1";
+const MODEL_ID = "tencent/hunyuan-3d-3.1";
 const API_BASE = "https://api.replicate.com/v1";
 const POLL_INTERVAL_MS = 8000;
 
@@ -43,18 +43,18 @@ export async function runReplicate3D(options) {
   await loadDotEnv();
   const {
     image,
+    prompt,
     outputDir,
     assetName,
     metadataPath,
     metadata = {},
-    steps = 50,
-    guidanceScale = 5.5,
-    octreeResolution = 256,
-    removeBackground = true,
-    seed
+    enablePbr = true,
+    faceCount = 500000,
+    generateType = "Normal",
   } = options;
 
-  if (!image) throw new Error("Input image is required.");
+  if (!image && !prompt) throw new Error("Either image or prompt is required.");
+  if (image && prompt) throw new Error("Provide either image or prompt, not both.");
   if (!outputDir) throw new Error("outputDir is required.");
 
   await ensureDir(outputDir);
@@ -62,21 +62,18 @@ export async function runReplicate3D(options) {
   const apiKey = await requireEnv("REPLICATE_API_KEY");
   const submittedAt = new Date().toISOString();
 
-  const imageDataUri = await imageToDataUri(image);
-
   const input = {
-    image: imageDataUri,
-    steps,
-    guidance_scale: guidanceScale,
-    octree_resolution: octreeResolution,
-    remove_background: removeBackground
+    enable_pbr: enablePbr,
+    face_count: faceCount,
+    generate_type: generateType,
   };
-  if (seed !== undefined) input.seed = seed;
+  if (image) input.image = await imageToDataUri(image);
+  if (prompt) input.prompt = prompt;
 
-  const submitRes = await fetch(`${API_BASE}/predictions`, {
+  const submitRes = await fetch(`${API_BASE}/models/${MODEL_ID}/predictions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ version: MODEL_VERSION, input })
+    body: JSON.stringify({ input })
   });
 
   if (!submitRes.ok) {
@@ -102,21 +99,16 @@ export async function runReplicate3D(options) {
 
   const completed = await pollPrediction(predictionUrl, apiKey);
 
-  // Hunyuan3D-2 on Replicate returns output as array of objects with {mesh, textures} or flat URLs
-  let outputUrls = [];
-  if (Array.isArray(completed.output)) {
-    for (const item of completed.output) {
-      if (typeof item === "string") outputUrls.push(item);
-      else if (item?.mesh) outputUrls.push(item.mesh);
-    }
-  } else if (completed.output) {
-    outputUrls = [completed.output];
-  }
+  // Hunyuan3D-3.1 returns a single string URI
+  const outputUrl = typeof completed.output === "string" ? completed.output : null;
+  if (!outputUrl) throw new Error("Replicate returned no output file.");
+  const outputUrls = [outputUrl];
 
-  if (!outputUrls.length) throw new Error("Replicate returned no output files.");
-
-  const fakeResult = { data: { glb: outputUrls[0], files: outputUrls } };
-  const downloaded = await downloadRemoteFiles(fakeResult.data, outputDir, assetName || "model");
+  const ext = path.extname(new URL(outputUrl).pathname) || ".glb";
+  const fileName = `${assetName || "model"}${ext}`;
+  const outputPath = path.join(outputDir, fileName);
+  await downloadFile(outputUrl, outputPath);
+  const downloaded = [{ label: "glb", path: outputPath, source: { url: outputUrl, content_type: "model/gltf-binary" } }];
 
   const summary = buildRequestSummary({
     kind: "3d",
@@ -125,7 +117,7 @@ export async function runReplicate3D(options) {
     metadata,
     requestId: prediction.id,
     submittedAt,
-    inputFiles: [image],
+    inputFiles: image ? [image] : [],
     outputFiles: downloaded.map((f) => f.path),
     downloadedFiles: downloaded,
     result: { output: outputUrls }

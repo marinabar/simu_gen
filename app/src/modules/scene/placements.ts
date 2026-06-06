@@ -35,7 +35,7 @@ export function createDefaultPlacements(objects: WorldObjectAsset[]): WorldObjec
       objectId: object.id,
       assetId: object.assetId,
       physics: 'rigidbody',
-      position: [x, 0, rowZ],
+      position: [x, 0.05, rowZ],
       rotation: [0, 0, 0],
       scale: [1, 1, 1],
     }

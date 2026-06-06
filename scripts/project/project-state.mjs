@@ -56,7 +56,7 @@ function isSourceAnalysis(filePath) {
 
 function isVisibleGeneratedFile(filePath) {
   const fileName = path.basename(filePath)
-  return !isHiddenRequestMetadata(filePath) && isVisibleFile(filePath) && fileName !== 'sfx.json'
+  return !isHiddenRequestMetadata(filePath) && isVisibleFile(filePath)
 }
 
 function isWorldRequest(filePath) {
