@@ -1,0 +1,14 @@
+{
+  "name": "simu-gen",
+  "private": true,
+  "version": "0.0.1",
+  "workspaces": [
+    "app"
+  ],
+  "scripts": {
+    "setup": "node setup.mjs",
+    "dev": "npm run dev --workspace app",
+    "build": "npm run build --workspace app",
+    "preview": "npm run preview --workspace app"
+  }
+}
